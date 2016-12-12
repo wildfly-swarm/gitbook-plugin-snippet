@@ -60,8 +60,6 @@ module.exports = {
         const commitMessage = snippetMatch[3]
         const filepath = path.join(dir, filename)
 
-        console.log( filename, commitMessage, filepath );
-
         const promise = commitMessage ? gitCat(commitMessage, filepath) : readFile(filepath)
         readFilePromises.push(promise)
       }
@@ -71,9 +69,7 @@ module.exports = {
       return Promise.all(readFilePromises)
         .then(() => {
           page.content = page.content.replace(snippetRegexp, (snippetLink, filename, fragment) => {
-            console.log( "in", snippetLink )
             const shouldUnindent = snippetLink.startsWith('[un')
-            console.log( "another", shouldUnindent )
             const filepath = path.join(dir, filename)
             const source = sourceByFilepath[filepath]
             if (!source) return problem(filename, `${snippetLink} *FILE NOT FOUND: ${filename}*`)
