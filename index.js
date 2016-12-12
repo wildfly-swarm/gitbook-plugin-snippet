@@ -50,7 +50,7 @@ module.exports = {
         })
       }
 
-      const snippetRegexp = /^\s*\[snippet\]\(([^#\)]+)#?([^\)@]+)?@?([^\)]+)?\)\s*$/gm
+      const snippetRegexp = /^\s*\[(?:un)?snippet\]\(([^#\)]+)#?([^\)@]+)?@?([^\)]+)?\)\s*$/gm
 
       // find all [snippet]() statements,
       // read and cache target files
@@ -59,6 +59,8 @@ module.exports = {
         const filename = snippetMatch[1]
         const commitMessage = snippetMatch[3]
         const filepath = path.join(dir, filename)
+
+        console.log( filename, commitMessage, filepath );
 
         const promise = commitMessage ? gitCat(commitMessage, filepath) : readFile(filepath)
         readFilePromises.push(promise)
@@ -69,15 +71,18 @@ module.exports = {
       return Promise.all(readFilePromises)
         .then(() => {
           page.content = page.content.replace(snippetRegexp, (snippetLink, filename, fragment) => {
+            console.log( "in", snippetLink )
+            const shouldUnindent = snippetLink.startsWith('[un')
+            console.log( "another", shouldUnindent )
             const filepath = path.join(dir, filename)
             const source = sourceByFilepath[filepath]
             if (!source) return problem(filename, `${snippetLink} *FILE NOT FOUND: ${filename}*`)
-            if (!fragment) return source
+            if (!fragment) return removeMarkers(source)
             // find the content between two anchors, which can be "### [fragment-nane]" or "/// [fragment-nane]"
-            const fragmentRegexp = new RegExp(`[\\s\\S]*(?:###|\\/\\/\\/)\\s*\\[${fragment}\\]([\\s\\S]*)(?:###|\\/\\/\\/)\\s*\\[${fragment}\\]`)
+            const fragmentRegexp = new RegExp(`[\\s\\S]*(?:###|\\/\\/\\/)\\s*\\[${fragment}\\][^\\n]*\\n([\\s\\S]*)(?:\\n[^\\n]*###|\\/\\/\\/)\\s*\\[${fragment}\\]`)
             const fragmentMatch = source.match(fragmentRegexp)
             if (!fragmentMatch) return problem(filename, `${snippetLink} *FRAGMENT NOT FOUND: ${filename}#${fragment}*`)
-            return unindent(fragmentMatch[1])
+            return removeMarkers(shouldUnindent? unindent(fragmentMatch[1]) : fragmentMatch[1] )
           })
           return page
         })
@@ -89,4 +94,10 @@ const unindent = s => {
   // https://twitter.com/gasparnagy/status/778134306128551940
   for (; !s.match(/^\S/m); s = s.replace(/^\s/gm, ''));
   return s
+}
+
+const removeMarkers = s => {
+  const markerRegexp = new RegExp(`(?:\\n[^\\n]*###|\\/\\/\\/)\\s*\\[[^\\]]*\\]`, 'g' );
+  s = s.replace( markerRegexp, '' );
+  return s;
 }
